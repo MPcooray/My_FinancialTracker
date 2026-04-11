@@ -1,0 +1,70 @@
+package com.example.my_financialtracker.ui.screens.profile
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.example.my_financialtracker.R
+import com.example.my_financialtracker.ui.components.AppScaffold
+import com.example.my_financialtracker.ui.state.ProfileUiState
+
+@Composable
+fun ProfileScreen(
+    uiState: ProfileUiState,
+    onOpenSettings: () -> Unit,
+    onSignOut: () -> Unit,
+    onBack: () -> Unit,
+) {
+    AppScaffold(
+        title = stringResource(R.string.profile_title),
+        currentRoute = null,
+        showBottomBar = false,
+        onBottomNavClick = {},
+    ) { modifier ->
+        Column(
+            modifier = modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.profile_account_heading),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(uiState.displayName, style = MaterialTheme.typography.titleLarge)
+                    Text(uiState.email, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        text = stringResource(R.string.profile_preferred_currency, uiState.preferredCurrency),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Button(onClick = onOpenSettings, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.profile_open_settings))
+            }
+            Button(onClick = onSignOut, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.profile_sign_out))
+            }
+            Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.button_back))
+            }
+        }
+    }
+}

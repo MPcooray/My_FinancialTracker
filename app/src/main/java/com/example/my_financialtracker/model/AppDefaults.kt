@@ -1,0 +1,27 @@
+package com.example.my_financialtracker.model
+
+object AppDefaults {
+    const val DEFAULT_INCOME_SOURCE = "Salary"
+    const val DEFAULT_CURRENCY = "LKR"
+    const val DEFAULT_SPENDING_TYPE = "Committed"
+    const val DEFAULT_PAYMENT_METHOD = "Card"
+    const val DEFAULT_ACCOUNT_NAME = "Main account"
+
+    const val INCOME_HELPER_TEXT = "Salary, freelance, AdSense, or crypto income"
+    const val EXPENSE_HELPER_TEXT =
+        "Capture category, amount, currency, payment method, and spending type quickly"
+
+    const val ERROR_INVALID_INCOME = "Enter a valid income amount."
+    const val ERROR_INVALID_EXPENSE = "Enter a valid expense amount."
+    const val SUCCESS_INCOME_SAVED = "Income saved successfully."
+    const val SUCCESS_EXPENSE_SAVED = "Expense saved successfully."
+    const val SUCCESS_TRANSACTION_UPDATED = "Transaction updated."
+    const val SUCCESS_TRANSACTION_DELETED = "Transaction deleted."
+    const val SUCCESS_CURRENCY_UPDATED = "Display currency updated."
+    const val ERROR_INCOME_SAVE = "Could not save income."
+    const val ERROR_EXPENSE_SAVE = "Could not save expense."
+    const val ERROR_TRANSACTION_UPDATE = "Could not update transaction."
+    const val ERROR_TRANSACTION_DELETE = "Could not delete transaction."
+    const val ERROR_SIGN_IN = "Sign in failed."
+    const val ERROR_REGISTER = "Registration failed."
+}

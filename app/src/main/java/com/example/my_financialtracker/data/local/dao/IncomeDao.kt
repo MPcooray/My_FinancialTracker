@@ -1,0 +1,30 @@
+package com.example.my_financialtracker.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import com.example.my_financialtracker.data.local.entity.IncomeEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface IncomeDao {
+    @Query("SELECT * FROM income_entries ORDER BY receivedAt DESC")
+    fun observeAll(): Flow<List<IncomeEntity>>
+
+    @Query("SELECT * FROM income_entries ORDER BY receivedAt DESC")
+    suspend fun getAll(): List<IncomeEntity>
+
+    @Query("SELECT * FROM income_entries WHERE id = :id LIMIT 1")
+    suspend fun getById(id: String): IncomeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<IncomeEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: IncomeEntity)
+
+    @Delete
+    suspend fun delete(item: IncomeEntity)
+}
