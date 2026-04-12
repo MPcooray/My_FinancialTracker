@@ -31,6 +31,8 @@ class DashboardViewModel(
         val expenseChart: List<ChartDatum>,
         val incomeChart: List<ChartDatum>,
         val spendingSplitChart: List<ChartDatum>,
+        val spendVsLeftChart: List<ChartDatum>,
+        val spendVsLeftMessage: String,
     )
 
     private val summaryAndTransactions = combine(
@@ -60,11 +62,24 @@ class DashboardViewModel(
             expenseChart = expenseChart,
             incomeChart = incomeChart,
             spendingSplitChart = spendingSplitChart,
+            spendVsLeftChart = emptyList(),
+            spendVsLeftMessage = "",
+        )
+    }
+
+    private val dashboardBundleWithSpendState = combine(
+        dashboardBundle,
+        localRepository?.observeSpendVsLeftChart() ?: flowOf(emptyList()),
+        localRepository?.observeSpendVsLeftMessage() ?: flowOf(""),
+    ) { bundle, spendVsLeftChart, spendVsLeftMessage ->
+        bundle.copy(
+            spendVsLeftChart = spendVsLeftChart,
+            spendVsLeftMessage = spendVsLeftMessage,
         )
     }
 
     val uiState: StateFlow<DashboardUiState> = combine(
-        dashboardBundle,
+        dashboardBundleWithSpendState,
         goalRepository.observePrimaryGoal(),
     ) { bundle: DashboardBundle, featuredGoal: GoalOverview? ->
         DashboardUiState(
@@ -73,6 +88,8 @@ class DashboardViewModel(
             expenseChart = bundle.expenseChart,
             incomeChart = bundle.incomeChart,
             spendingSplitChart = bundle.spendingSplitChart,
+            spendVsLeftChart = bundle.spendVsLeftChart,
+            spendVsLeftMessage = bundle.spendVsLeftMessage,
             featuredGoal = featuredGoal,
             recentTransactions = bundle.transactions,
         )

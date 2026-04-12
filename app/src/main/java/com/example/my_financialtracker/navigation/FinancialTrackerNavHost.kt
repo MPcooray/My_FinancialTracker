@@ -148,9 +148,13 @@ fun FinancialTrackerNavHost(navController: NavHostController) {
         composable(AppDestination.Transactions.route) {
             val viewModel: TransactionsViewModel = viewModel()
             val transactions = viewModel.transactions.collectAsStateWithLifecycle().value
+            val insights = viewModel.insights.collectAsStateWithLifecycle().value
+            val spendingStatus = viewModel.spendingStatus.collectAsStateWithLifecycle().value
             val message = viewModel.message.collectAsStateWithLifecycle().value
             TransactionsScreen(
                 transactions = transactions,
+                insights = insights,
+                spendingStatus = spendingStatus,
                 message = message,
                 onUpdateTransaction = viewModel::updateTransaction,
                 onDeleteTransaction = viewModel::deleteTransaction,

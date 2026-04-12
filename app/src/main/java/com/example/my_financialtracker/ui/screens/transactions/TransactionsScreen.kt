@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.my_financialtracker.R
 import com.example.my_financialtracker.model.AppDefaults
+import com.example.my_financialtracker.model.InsightItem
 import com.example.my_financialtracker.model.TransactionItem
 import com.example.my_financialtracker.model.TransactionType
 import com.example.my_financialtracker.model.expenseCategories
@@ -40,6 +42,8 @@ import com.example.my_financialtracker.ui.components.DropdownField
 @Composable
 fun TransactionsScreen(
     transactions: List<TransactionItem>,
+    insights: List<InsightItem>,
+    spendingStatus: String,
     message: String?,
     onUpdateTransaction: (TransactionItem) -> Unit,
     onDeleteTransaction: (TransactionItem) -> Unit,
@@ -66,7 +70,7 @@ fun TransactionsScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = stringResource(R.string.transactions_copy),
+                        text = stringResource(R.string.history_copy),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -77,6 +81,66 @@ fun TransactionsScreen(
                         )
                     }
                 }
+            }
+
+            if (spendingStatus.isNotBlank()) {
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                        ),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.dashboard_spend_vs_left_title),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                text = spendingStatus,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    text = stringResource(R.string.history_insights_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
+            items(insights) { insight ->
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(insight.title, fontWeight = FontWeight.SemiBold)
+                        Text(insight.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            item {
+                Text(
+                    text = stringResource(R.string.history_recent_transactions_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
 
             items(transactions) { item ->

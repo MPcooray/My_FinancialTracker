@@ -29,7 +29,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.my_financialtracker.R
-import com.example.my_financialtracker.model.QuickAction
 import com.example.my_financialtracker.ui.components.ActionCard
 import com.example.my_financialtracker.ui.components.AppScaffold
 import com.example.my_financialtracker.ui.components.HorizontalBarChartCard
@@ -47,21 +46,6 @@ fun DashboardScreen(
     onBottomNavClick: (String) -> Unit,
     currentRoute: String,
 ) {
-    val quickActions = listOf(
-        QuickAction(
-            stringResource(R.string.quick_action_income_title),
-            stringResource(R.string.quick_action_income_copy),
-        ),
-        QuickAction(
-            stringResource(R.string.quick_action_expense_title),
-            stringResource(R.string.quick_action_expense_copy),
-        ),
-        QuickAction(
-            stringResource(R.string.quick_action_mix_title),
-            stringResource(R.string.quick_action_mix_copy),
-        ),
-    )
-
     AppScaffold(
         title = stringResource(R.string.dashboard_title),
         currentRoute = currentRoute,
@@ -141,7 +125,6 @@ fun DashboardScreen(
                     ) {
                         Text(item.title, fontWeight = FontWeight.SemiBold)
                         Text(item.amountLabel, style = MaterialTheme.typography.titleMedium)
-                        Text(item.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -174,6 +157,13 @@ fun DashboardScreen(
                 )
             }
 
+            item {
+                PieChartCard(
+                    title = stringResource(R.string.dashboard_spend_vs_left_chart),
+                    items = uiState.spendVsLeftChart,
+                )
+            }
+
             uiState.featuredGoal?.let { goal ->
                 item {
                     Card(shape = RoundedCornerShape(22.dp)) {
@@ -197,54 +187,6 @@ fun DashboardScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                    }
-                }
-            }
-
-            items(uiState.insightItems) { insight ->
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    ),
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(insight.title, fontWeight = FontWeight.SemiBold)
-                        Text(insight.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            items(quickActions) { action ->
-                Card(shape = RoundedCornerShape(18.dp)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Text(action.title, fontWeight = FontWeight.SemiBold)
-                        Text(action.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
-
-            items(uiState.recentTransactions.take(6)) { transaction ->
-                Card(shape = RoundedCornerShape(18.dp)) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Text(transaction.title, fontWeight = FontWeight.SemiBold)
-                        Text(transaction.amountLabel)
-                        Text(transaction.meta, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

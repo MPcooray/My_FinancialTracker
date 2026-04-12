@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.my_financialtracker.data.AppContainer
 import com.example.my_financialtracker.model.AppDefaults
+import com.example.my_financialtracker.model.InsightItem
 import com.example.my_financialtracker.model.TransactionItem
 import com.example.my_financialtracker.repository.FinanceRepository
+import com.example.my_financialtracker.repository.local.LocalFinanceRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -17,11 +20,27 @@ import kotlinx.coroutines.launch
 class TransactionsViewModel(
     private val repository: FinanceRepository = AppContainer.financeRepository,
 ) : ViewModel() {
+    private val localRepository = repository as? LocalFinanceRepository
+
     val transactions: StateFlow<List<TransactionItem>> = repository.observeRecentTransactions()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList(),
+        )
+
+    val insights: StateFlow<List<InsightItem>> = (localRepository?.observeInsights() ?: flowOf(emptyList()))
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = emptyList(),
+        )
+
+    val spendingStatus: StateFlow<String> = (localRepository?.observeSpendVsLeftMessage() ?: flowOf(""))
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = "",
         )
 
     private val _message = MutableStateFlow<String?>(null)

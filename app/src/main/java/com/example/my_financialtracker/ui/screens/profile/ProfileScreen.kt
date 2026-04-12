@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +34,9 @@ fun ProfileScreen(
         onBottomNavClick = {},
     ) { modifier ->
         Column(
-            modifier = modifier.fillMaxSize(),
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Card {
@@ -53,6 +57,30 @@ fun ProfileScreen(
                         text = stringResource(R.string.profile_preferred_currency, uiState.preferredCurrency),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+            }
+
+            Card {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.profile_how_it_works_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        text = stringResource(R.string.profile_how_it_works_intro),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(stringResource(R.string.profile_how_it_works_step_1))
+                    Text(stringResource(R.string.profile_how_it_works_step_2))
+                    Text(stringResource(R.string.profile_how_it_works_step_3))
+                    Text(stringResource(R.string.profile_how_it_works_step_4))
+                    Text(stringResource(R.string.profile_how_it_works_step_5))
                 }
             }
 

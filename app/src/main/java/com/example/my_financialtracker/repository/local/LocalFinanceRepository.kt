@@ -119,6 +119,45 @@ class LocalFinanceRepository(
         }
     }
 
+    fun observeSpendVsLeftChart(): Flow<List<ChartDatum>> {
+        return combine(
+            incomeDao.observeAll(),
+            expenseDao.observeAll(),
+            userPreferencesRepository.preferredCurrency,
+            exchangeRateRepository.ratesToLkr,
+        ) { incomes, expenses, preferredCurrency, rates ->
+            val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
+            val spent = actualExpenses.sumOf { it.amountLkr }
+            val income = incomes.sumOf { it.amountLkr }
+            val left = max(income - spent, 0.0)
+
+            listOf(
+                ChartDatum("Spent", spent, formatDisplayCurrency(spent, preferredCurrency, rates)),
+                ChartDatum("Left", left, formatDisplayCurrency(left, preferredCurrency, rates)),
+            )
+        }
+    }
+
+    fun observeSpendVsLeftMessage(): Flow<String> {
+        return combine(
+            incomeDao.observeAll(),
+            expenseDao.observeAll(),
+            userPreferencesRepository.preferredCurrency,
+            exchangeRateRepository.ratesToLkr,
+        ) { incomes, expenses, preferredCurrency, rates ->
+            val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
+            val spent = actualExpenses.sumOf { it.amountLkr }
+            val income = incomes.sumOf { it.amountLkr }
+            val left = income - spent
+
+            if (left >= 0.0) {
+                "You've spent ${formatDisplayCurrency(spent, preferredCurrency, rates)} and still have ${formatDisplayCurrency(left, preferredCurrency, rates)} left from recorded income."
+            } else {
+                "You've spent ${formatDisplayCurrency(spent, preferredCurrency, rates)}, which is ${formatDisplayCurrency(kotlin.math.abs(left), preferredCurrency, rates)} over recorded income."
+            }
+        }
+    }
+
     fun observeInsights(): Flow<List<InsightItem>> {
         return combine(
             incomeDao.observeAll(),

@@ -13,6 +13,8 @@ data class DashboardUiState(
     val expenseChart: List<ChartDatum> = emptyList(),
     val incomeChart: List<ChartDatum> = emptyList(),
     val spendingSplitChart: List<ChartDatum> = emptyList(),
+    val spendVsLeftChart: List<ChartDatum> = emptyList(),
+    val spendVsLeftMessage: String = "",
     val featuredGoal: GoalOverview? = null,
     val recentTransactions: List<TransactionItem> = emptyList(),
 )
