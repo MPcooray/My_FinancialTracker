@@ -9,17 +9,19 @@ import com.example.my_financialtracker.data.AppContainer
 import com.example.my_financialtracker.ui.state.ProfileUiState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 class ProfileViewModel : ViewModel() {
     private val auth = AppContainer.firebaseAuth
+    private val sessionManager = AppContainer.authSessionManager
     private val preferences = AppContainer.userPreferencesRepository
     private val context = AppContainer.appContext
 
-    val uiState: StateFlow<ProfileUiState> = preferences.preferredCurrency
-        .map { currency ->
-            val user = auth.currentUser
+    val uiState: StateFlow<ProfileUiState> = combine(
+        preferences.preferredCurrency,
+        sessionManager.currentUser,
+    ) { currency, user ->
             ProfileUiState(
                 displayName = user?.displayName ?: user?.email ?: "User",
                 email = user?.email.orEmpty(),
@@ -35,6 +37,7 @@ class ProfileViewModel : ViewModel() {
 
     fun signOut() {
         auth.signOut()
+        sessionManager.clear()
     }
 
     private fun isNotificationListenerEnabled(): Boolean {

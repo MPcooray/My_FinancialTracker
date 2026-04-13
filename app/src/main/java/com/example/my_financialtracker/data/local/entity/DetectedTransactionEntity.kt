@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "detected_transactions")
 data class DetectedTransactionEntity(
     @PrimaryKey val id: String,
+    val userId: String,
     val packageName: String,
     val title: String,
     val rawText: String,

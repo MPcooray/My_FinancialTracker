@@ -28,6 +28,7 @@ object NotificationTransactionParser {
 
         return DetectedTransactionEntity(
             id = "detected_${UUID.randomUUID()}",
+            userId = "",
             packageName = packageName,
             title = title.ifBlank { "Detected transaction" },
             rawText = combined,

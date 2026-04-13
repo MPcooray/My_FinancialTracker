@@ -15,7 +15,7 @@ import com.example.my_financialtracker.data.local.entity.IncomeEntity
 
 @Database(
     entities = [IncomeEntity::class, ExpenseEntity::class, GoalEntity::class, DetectedTransactionEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class FinanceDatabase : RoomDatabase() {

@@ -24,4 +24,12 @@ object AppDefaults {
     const val ERROR_TRANSACTION_DELETE = "Could not delete transaction."
     const val ERROR_SIGN_IN = "Sign in failed."
     const val ERROR_REGISTER = "Registration failed."
+    const val ERROR_AUTH_TIMEOUT =
+        "Authentication timed out. Please check your connection and try again."
+    const val ERROR_AUTH_NETWORK =
+        "Authentication could not reach Firebase. Check your network and try again."
+    const val ERROR_AUTH_TOO_MANY_REQUESTS =
+        "Too many authentication attempts. Please wait a moment and try again."
+    const val ERROR_AUTH_INVALID_CREDENTIALS =
+        "Your email or password is incorrect."
 }

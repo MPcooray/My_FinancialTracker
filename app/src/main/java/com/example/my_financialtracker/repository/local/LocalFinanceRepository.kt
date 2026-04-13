@@ -6,21 +6,25 @@ import com.example.my_financialtracker.data.local.dao.DetectedTransactionDao
 import com.example.my_financialtracker.data.local.dao.ExpenseDao
 import com.example.my_financialtracker.data.local.dao.GoalDao
 import com.example.my_financialtracker.data.local.dao.IncomeDao
+import com.example.my_financialtracker.data.local.entity.GoalEntity
 import com.example.my_financialtracker.data.notification.NotificationTransactionParser
 import com.example.my_financialtracker.model.DetectedTransactionItem
 import com.example.my_financialtracker.data.local.entity.ExpenseEntity
 import com.example.my_financialtracker.data.local.entity.IncomeEntity
 import com.example.my_financialtracker.data.preferences.UserPreferencesRepository
 import com.example.my_financialtracker.data.remote.FirestoreSyncService
+import com.example.my_financialtracker.data.session.AuthSessionManager
 import com.example.my_financialtracker.model.ChartDatum
 import com.example.my_financialtracker.model.InsightItem
 import com.example.my_financialtracker.model.SummaryCard
 import com.example.my_financialtracker.model.TransactionItem
 import com.example.my_financialtracker.model.TransactionType
 import com.example.my_financialtracker.repository.FinanceRepository
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import java.util.Calendar
 import java.util.UUID
 import kotlin.math.max
@@ -32,18 +36,12 @@ class LocalFinanceRepository(
     private val detectedTransactionDao: DetectedTransactionDao,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val exchangeRateRepository: ExchangeRateRepository,
-    private val firebaseAuth: FirebaseAuth,
+    private val authSessionManager: AuthSessionManager,
     private val syncService: FirestoreSyncService,
 ) : FinanceRepository {
 
     override fun observeDashboardSummary(): Flow<List<SummaryCard>> {
-        return combine(
-            incomeDao.observeAll(),
-            expenseDao.observeAll(),
-            goalDao.observeAllGoals(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { incomes, expenses, goals, preferredCurrency, rates ->
+        return scopedFinanceData { incomes, expenses, goals, preferredCurrency, rates ->
             val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
             val incomeTotal = incomes.sumOf { it.amountLkr }
             val expenseTotal = actualExpenses.sumOf { it.amountLkr }
@@ -54,12 +52,12 @@ class LocalFinanceRepository(
                 SummaryCard(
                     title = "Income recorded",
                     amountLabel = formatDisplayCurrency(incomeTotal, preferredCurrency, rates),
-                    description = "Salary, freelance, AdSense, and crypto in one view",
+                    description = "All income added to this account",
                 ),
                 SummaryCard(
                     title = "Expenses recorded",
                     amountLabel = formatDisplayCurrency(expenseTotal, preferredCurrency, rates),
-                    description = "Committed, discretionary, and recurring expenses combined",
+                    description = "Spent so far across all expense entries",
                 ),
                 SummaryCard(
                     title = "Estimated free cash",
@@ -71,70 +69,82 @@ class LocalFinanceRepository(
     }
 
     override fun observeExpenseChart(): Flow<List<ChartDatum>> {
-        return combine(
-            expenseDao.observeAll(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { expenses, preferredCurrency, rates ->
-            expenses.filterNot { it.isRecurringTemplate }
-                .groupBy { it.category }
-                .map { (label, items) ->
-                    val amountLkr = items.sumOf { it.amountLkr }
-                    ChartDatum(
-                        label = label,
-                        value = amountLkr,
-                        valueLabel = formatDisplayCurrency(amountLkr, preferredCurrency, rates),
-                    )
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    expenseDao.observeAll(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { expenses, preferredCurrency, rates ->
+                    expenses.filterNot { it.isRecurringTemplate }
+                        .groupBy { it.category }
+                        .map { (label, items) ->
+                            val amountLkr = items.sumOf { it.amountLkr }
+                            ChartDatum(
+                                label = label,
+                                value = amountLkr,
+                                valueLabel = formatDisplayCurrency(amountLkr, preferredCurrency, rates),
+                            )
+                        }
+                        .sortedByDescending { it.value }
+                        .take(6)
                 }
-                .sortedByDescending { it.value }
-                .take(6)
+            }
         }
     }
 
     override fun observeIncomeChart(): Flow<List<ChartDatum>> {
-        return combine(
-            incomeDao.observeAll(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { incomes, preferredCurrency, rates ->
-            incomes.groupBy { it.sourceType.replaceFirstChar(Char::uppercase) }
-                .map { (label, items) ->
-                    val amountLkr = items.sumOf { it.amountLkr }
-                    ChartDatum(
-                        label = label,
-                        value = amountLkr,
-                        valueLabel = formatDisplayCurrency(amountLkr, preferredCurrency, rates),
-                    )
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    incomeDao.observeAll(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { incomes, preferredCurrency, rates ->
+                    incomes.groupBy { it.sourceType.replaceFirstChar(Char::uppercase) }
+                        .map { (label, items) ->
+                            val amountLkr = items.sumOf { it.amountLkr }
+                            ChartDatum(
+                                label = label,
+                                value = amountLkr,
+                                valueLabel = formatDisplayCurrency(amountLkr, preferredCurrency, rates),
+                            )
+                        }
+                        .sortedByDescending { it.value }
+                        .take(6)
                 }
-                .sortedByDescending { it.value }
-                .take(6)
+            }
         }
     }
 
     fun observeSpendingSplitChart(): Flow<List<ChartDatum>> {
-        return combine(
-            expenseDao.observeAll(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { expenses, preferredCurrency, rates ->
-            val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
-            val committed = actualExpenses.filter { it.spendingType.equals("Committed", true) }.sumOf { it.amountLkr }
-            val discretionary = actualExpenses.filter { it.spendingType.equals("Discretionary", true) }.sumOf { it.amountLkr }
-            listOf(
-                ChartDatum("Committed", committed, formatDisplayCurrency(committed, preferredCurrency, rates)),
-                ChartDatum("Discretionary", discretionary, formatDisplayCurrency(discretionary, preferredCurrency, rates)),
-            )
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    expenseDao.observeAll(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { expenses, preferredCurrency, rates ->
+                    val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
+                    val committed = actualExpenses.filter { it.spendingType.equals("Committed", true) }.sumOf { it.amountLkr }
+                    val discretionary = actualExpenses.filter { it.spendingType.equals("Discretionary", true) }.sumOf { it.amountLkr }
+                    listOf(
+                        ChartDatum("Committed", committed, formatDisplayCurrency(committed, preferredCurrency, rates)),
+                        ChartDatum("Discretionary", discretionary, formatDisplayCurrency(discretionary, preferredCurrency, rates)),
+                    )
+                }
+            }
         }
     }
 
     fun observeSpendVsLeftChart(): Flow<List<ChartDatum>> {
-        return combine(
-            incomeDao.observeAll(),
-            expenseDao.observeAll(),
-            goalDao.observeAllGoals(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { incomes, expenses, goals, preferredCurrency, rates ->
+        return scopedFinanceData { incomes, expenses, goals, preferredCurrency, rates ->
             val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
             val spent = actualExpenses.sumOf { it.amountLkr }
             val reserved = goals.sumOf { it.currentSavedLkr }
@@ -150,13 +160,7 @@ class LocalFinanceRepository(
     }
 
     fun observeSpendVsLeftMessage(): Flow<String> {
-        return combine(
-            incomeDao.observeAll(),
-            expenseDao.observeAll(),
-            goalDao.observeAllGoals(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { incomes, expenses, goals, preferredCurrency, rates ->
+        return scopedFinanceData { incomes, expenses, goals, preferredCurrency, rates ->
             val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
             val spent = actualExpenses.sumOf { it.amountLkr }
             val reserved = goals.sumOf { it.currentSavedLkr }
@@ -172,52 +176,52 @@ class LocalFinanceRepository(
     }
 
     fun observeInsights(): Flow<List<InsightItem>> {
-        return combine(
-            incomeDao.observeAll(),
-            expenseDao.observeAll(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { incomes, expenses, preferredCurrency, rates ->
-            val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
-            val recurringCount = expenses.count { it.isRecurringTemplate }
-            val committed = actualExpenses.filter { it.spendingType.equals("Committed", ignoreCase = true) }
-                .sumOf { it.amountLkr }
-            val discretionary = actualExpenses.filter { it.spendingType.equals("Discretionary", ignoreCase = true) }
-                .sumOf { it.amountLkr }
-            val topCategory = actualExpenses.groupBy { it.category }
-                .maxByOrNull { (_, items) -> items.sumOf { it.amountLkr } }
-                ?.key ?: "No category yet"
-            val monthlyIncome = incomes.sumOf { it.amountLkr }
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    incomeDao.observeAll(user.uid),
+                    expenseDao.observeAll(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { incomes, expenses, preferredCurrency, rates ->
+                    val actualExpenses = expenses.filterNot { it.isRecurringTemplate }
+                    val recurringCount = expenses.count { it.isRecurringTemplate }
+                    val committed = actualExpenses.filter { it.spendingType.equals("Committed", ignoreCase = true) }
+                        .sumOf { it.amountLkr }
+                    val discretionary = actualExpenses.filter { it.spendingType.equals("Discretionary", ignoreCase = true) }
+                        .sumOf { it.amountLkr }
+                    val topCategory = actualExpenses.groupBy { it.category }
+                        .maxByOrNull { (_, items) -> items.sumOf { it.amountLkr } }
+                        ?.key ?: "No category yet"
+                    val monthlyIncome = incomes.sumOf { it.amountLkr }
 
-            listOf(
-                InsightItem(
-                    title = "Committed vs discretionary",
-                    description = "${formatDisplayCurrency(committed, preferredCurrency, rates)} committed and ${formatDisplayCurrency(discretionary, preferredCurrency, rates)} discretionary.",
-                ),
-                InsightItem(
-                    title = "Top expense category",
-                    description = topCategory,
-                ),
-                InsightItem(
-                    title = "Recurring expenses",
-                    description = "$recurringCount recurring plans are active in the tracker.",
-                ),
-                InsightItem(
-                    title = "Income spread",
-                    description = "You've recorded ${formatDisplayCurrency(monthlyIncome, preferredCurrency, rates)} across ${incomes.size} income entries.",
-                ),
-            )
+                    listOf(
+                        InsightItem(
+                            title = "Committed vs discretionary",
+                            description = "${formatDisplayCurrency(committed, preferredCurrency, rates)} committed and ${formatDisplayCurrency(discretionary, preferredCurrency, rates)} discretionary.",
+                        ),
+                        InsightItem(
+                            title = "Top expense category",
+                            description = topCategory,
+                        ),
+                        InsightItem(
+                            title = "Recurring expenses",
+                            description = "$recurringCount recurring plans are active in the tracker.",
+                        ),
+                        InsightItem(
+                            title = "Income spread",
+                            description = "You've recorded ${formatDisplayCurrency(monthlyIncome, preferredCurrency, rates)} across ${incomes.size} income entries.",
+                        ),
+                    )
+                }
+            }
         }
     }
 
     override fun observeRecentTransactions(): Flow<List<TransactionItem>> {
-        return combine(
-            incomeDao.observeAll(),
-            expenseDao.observeAll(),
-            goalDao.observeAllGoals(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { incomes, expenses, goals, preferredCurrency, rates ->
+        return scopedFinanceData { incomes, expenses, goals, preferredCurrency, rates ->
             val mappedIncome = incomes.map {
                 TransactionItem(
                     id = it.id,
@@ -272,136 +276,36 @@ class LocalFinanceRepository(
     }
 
     override fun observeDetectedTransactions(): Flow<List<DetectedTransactionItem>> {
-        return combine(
-            detectedTransactionDao.observePending(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { items, preferredCurrency, rates ->
-            items.map {
-                DetectedTransactionItem(
-                    id = it.id,
-                    title = it.title,
-                    amountLabel = formatDisplayCurrency(it.amountLkr, preferredCurrency, rates),
-                    merchant = it.merchant,
-                    detectedType = it.detectedType,
-                    suggestedCategoryOrSource = it.suggestedCategoryOrSource,
-                    rawText = it.rawText,
-                    currency = it.currency,
-                    amountOriginal = it.amountOriginal,
-                    occurredAt = it.occurredAt,
-                )
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    detectedTransactionDao.observePending(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { items, preferredCurrency, rates ->
+                    items.map {
+                        DetectedTransactionItem(
+                            id = it.id,
+                            title = it.title,
+                            amountLabel = formatDisplayCurrency(it.amountLkr, preferredCurrency, rates),
+                            merchant = it.merchant,
+                            detectedType = it.detectedType,
+                            suggestedCategoryOrSource = it.suggestedCategoryOrSource,
+                            rawText = it.rawText,
+                            currency = it.currency,
+                            amountOriginal = it.amountOriginal,
+                            occurredAt = it.occurredAt,
+                        )
+                    }
+                }
             }
         }
     }
 
     override suspend fun seedDemoDataIfNeeded() {
-        if (incomeDao.getAll().isNotEmpty() || expenseDao.getAll().isNotEmpty()) return
-
-        incomeDao.upsertAll(
-            listOf(
-                IncomeEntity(
-                    id = "income_salary_apr",
-                    sourceType = "salary",
-                    amountOriginal = 132000.0,
-                    currency = "LKR",
-                    exchangeRateToLkr = 1.0,
-                    amountLkr = 132000.0,
-                    note = "Monthly salary",
-                    receivedAt = 1713974400000,
-                    createdAt = 1713974400000,
-                ),
-                IncomeEntity(
-                    id = "income_freelance_apr",
-                    sourceType = "freelance",
-                    amountOriginal = 35000.0,
-                    currency = "LKR",
-                    exchangeRateToLkr = 1.0,
-                    amountLkr = 35000.0,
-                    note = "React SME milestone",
-                    receivedAt = 1713715200000,
-                    createdAt = 1713715200000,
-                ),
-                IncomeEntity(
-                    id = "income_adsense_apr",
-                    sourceType = "adsense",
-                    amountOriginal = 42.0,
-                    currency = "USD",
-                    exchangeRateToLkr = 300.0,
-                    amountLkr = 12600.0,
-                    note = "Blog revenue",
-                    receivedAt = 1713542400000,
-                    createdAt = 1713542400000,
-                ),
-            ),
-        )
-
-        val recurringTemplateId = "recurring_rent_template"
-        expenseDao.upsertAll(
-            listOf(
-                ExpenseEntity(
-                    id = recurringTemplateId,
-                    category = "Rent",
-                    spendingType = "Committed",
-                    recurrenceType = "Monthly",
-                    recurrenceGroupId = recurringTemplateId,
-                    isRecurringTemplate = true,
-                    originalCurrency = "LKR",
-                    originalAmount = 34000.0,
-                    amountLkr = 34000.0,
-                    paymentMethod = "Bank transfer",
-                    accountName = "Main account",
-                    note = "Monthly rent",
-                    spentAt = 1713638800000,
-                    createdAt = 1713638800000,
-                ),
-                ExpenseEntity(
-                    id = "expense_rent_apr",
-                    category = "Rent",
-                    spendingType = "Committed",
-                    recurrenceType = "Monthly",
-                    recurrenceGroupId = recurringTemplateId,
-                    isRecurringTemplate = false,
-                    originalCurrency = "LKR",
-                    originalAmount = 34000.0,
-                    amountLkr = 34000.0,
-                    paymentMethod = "Bank transfer",
-                    accountName = "Main account",
-                    note = "Monthly rent",
-                    spentAt = 1713638800000,
-                    createdAt = 1713638800000,
-                ),
-                ExpenseEntity(
-                    id = "expense_food",
-                    category = "Coffee & Dining",
-                    spendingType = "Discretionary",
-                    recurrenceType = "None",
-                    originalCurrency = "LKR",
-                    originalAmount = 6400.0,
-                    amountLkr = 6400.0,
-                    paymentMethod = "Card",
-                    accountName = "Main account",
-                    note = "Casual food spending cluster",
-                    spentAt = 1713801600000,
-                    createdAt = 1713801600000,
-                ),
-                ExpenseEntity(
-                    id = "expense_transport",
-                    category = "PickMe",
-                    spendingType = "Discretionary",
-                    recurrenceType = "None",
-                    originalCurrency = "LKR",
-                    originalAmount = 1800.0,
-                    amountLkr = 1800.0,
-                    paymentMethod = "Card",
-                    accountName = "Main account",
-                    note = "Ride expenses",
-                    spentAt = 1713888000000,
-                    createdAt = 1713888000000,
-                ),
-            ),
-        )
-
-        refreshRecurringExpensesIfNeeded()
+        // New users should start from zero with no seeded finance data.
     }
 
     override suspend fun addIncome(
@@ -410,11 +314,13 @@ class LocalFinanceRepository(
         currency: String,
         note: String,
     ): Result<Unit> = runCatching {
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
         val now = System.currentTimeMillis()
         val rateToLkr = exchangeRateRepository.getRateToLkr(currency)
         val amountLkr = CurrencyConverter.toLkr(amount, currency, rateToLkr)
         val entity = IncomeEntity(
             id = "income_${UUID.randomUUID()}",
+            userId = userId,
             sourceType = sourceType.lowercase(),
             amountOriginal = amount,
             currency = currency,
@@ -425,7 +331,7 @@ class LocalFinanceRepository(
             createdAt = now,
         )
         incomeDao.upsert(entity)
-        firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushIncome(uid, entity) }
+        runCatching { syncService.pushIncome(userId, entity) }
     }
 
     override suspend fun addExpense(
@@ -438,6 +344,7 @@ class LocalFinanceRepository(
         accountName: String,
         note: String,
     ): Result<Unit> = runCatching {
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
         val now = System.currentTimeMillis()
         val rateToLkr = exchangeRateRepository.getRateToLkr(currency)
         val amountLkr = CurrencyConverter.toLkr(amount, currency, rateToLkr)
@@ -445,6 +352,7 @@ class LocalFinanceRepository(
         if (recurrenceType == "None") {
             val entity = ExpenseEntity(
                 id = "expense_${UUID.randomUUID()}",
+                userId = userId,
                 category = category,
                 spendingType = spendingType,
                 recurrenceType = recurrenceType,
@@ -458,11 +366,12 @@ class LocalFinanceRepository(
                 createdAt = now,
             )
             expenseDao.upsert(entity)
-            firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushExpense(uid, entity) }
+            runCatching { syncService.pushExpense(userId, entity) }
         } else {
             val groupId = "recurring_${UUID.randomUUID()}"
             val template = ExpenseEntity(
                 id = groupId,
+                userId = userId,
                 category = category,
                 spendingType = spendingType,
                 recurrenceType = recurrenceType,
@@ -483,18 +392,18 @@ class LocalFinanceRepository(
                 isRecurringTemplate = false,
             )
             expenseDao.upsertAll(listOf(template, firstOccurrence))
-            firebaseAuth.currentUser?.uid?.let { uid ->
-                syncService.pushExpense(uid, template)
-                syncService.pushExpense(uid, firstOccurrence)
+            runCatching {
+                syncService.pushExpense(userId, template)
+                syncService.pushExpense(userId, firstOccurrence)
             }
         }
     }
 
     override suspend fun refreshRecurringExpensesIfNeeded() {
-        val allExpenses = expenseDao.getAll()
+        val userId = authSessionManager.currentUserValue?.uid ?: return
+        val allExpenses = expenseDao.getAll(userId)
         val templates = allExpenses.filter { it.isRecurringTemplate && it.recurrenceType != "None" }
         val generated = mutableListOf<ExpenseEntity>()
-        val userId = firebaseAuth.currentUser?.uid
         val now = System.currentTimeMillis()
 
         templates.forEach { template ->
@@ -514,7 +423,7 @@ class LocalFinanceRepository(
                 )
                 generated += occurrence
                 if (userId != null) {
-                    syncService.pushExpense(userId, occurrence)
+                    runCatching { syncService.pushExpense(userId, occurrence) }
                 }
                 nextDueAt = nextOccurrenceTime(nextDueAt, template.recurrenceType)
             }
@@ -531,6 +440,7 @@ class LocalFinanceRepository(
         body: String,
         postedAt: Long,
     ) {
+        val userId = authSessionManager.currentUserValue?.uid ?: return
         val rates = userPreferencesRepository.getCachedRates()
         val parsed = NotificationTransactionParser.parse(
             packageName = packageName,
@@ -540,7 +450,7 @@ class LocalFinanceRepository(
         ) { amount, currency ->
             val rateToLkr = (rates[currency.uppercase()] ?: rates["LKR"] ?: 1.0)
             CurrencyConverter.toLkr(amount, currency, rateToLkr)
-        } ?: return
+        }?.copy(userId = userId) ?: return
         detectedTransactionDao.upsert(parsed)
     }
 
@@ -551,7 +461,8 @@ class LocalFinanceRepository(
         chosenSpendingType: String,
         note: String,
     ): Result<Unit> = runCatching {
-        val detected = detectedTransactionDao.getById(id) ?: error("Detected transaction not found.")
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
+        val detected = detectedTransactionDao.getById(id, userId) ?: error("Detected transaction not found.")
         if (chosenType == "INCOME") {
             addIncome(
                 sourceType = chosenCategoryOrSource,
@@ -582,14 +493,16 @@ class LocalFinanceRepository(
     }
 
     override suspend fun ignoreDetectedTransaction(id: String): Result<Unit> = runCatching {
-        val detected = detectedTransactionDao.getById(id) ?: error("Detected transaction not found.")
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
+        val detected = detectedTransactionDao.getById(id, userId) ?: error("Detected transaction not found.")
         detectedTransactionDao.upsert(detected.copy(status = "IGNORED"))
     }
 
     override suspend fun updateTransaction(transaction: TransactionItem): Result<Unit> = runCatching {
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
         when (transaction.type) {
             TransactionType.INCOME -> {
-                val existing = incomeDao.getById(transaction.id) ?: error("Income not found.")
+                val existing = incomeDao.getById(transaction.id, userId) ?: error("Income not found.")
                 val rateToLkr = exchangeRateRepository.getRateToLkr(transaction.originalCurrency)
                 val updated = existing.copy(
                     sourceType = transaction.title.lowercase(),
@@ -600,10 +513,10 @@ class LocalFinanceRepository(
                     note = transaction.note,
                 )
                 incomeDao.upsert(updated)
-                firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushIncome(uid, updated) }
+                runCatching { syncService.pushIncome(userId, updated) }
             }
             TransactionType.EXPENSE -> {
-                val existing = expenseDao.getById(transaction.id) ?: error("Expense not found.")
+                val existing = expenseDao.getById(transaction.id, userId) ?: error("Expense not found.")
                 val rateToLkr = exchangeRateRepository.getRateToLkr(transaction.originalCurrency)
                 val updated = existing.copy(
                     category = transaction.title,
@@ -615,25 +528,45 @@ class LocalFinanceRepository(
                     note = transaction.note,
                 )
                 expenseDao.upsert(updated)
-                firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushExpense(uid, updated) }
+                runCatching { syncService.pushExpense(userId, updated) }
             }
             TransactionType.GOAL_TRANSFER -> error("Automatic goal reserve entries cannot be edited here.")
         }
     }
 
     override suspend fun deleteTransaction(transaction: TransactionItem): Result<Unit> = runCatching {
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
         when (transaction.type) {
             TransactionType.INCOME -> {
-                val existing = incomeDao.getById(transaction.id) ?: error("Income not found.")
+                val existing = incomeDao.getById(transaction.id, userId) ?: error("Income not found.")
                 incomeDao.delete(existing)
-                firebaseAuth.currentUser?.uid?.let { uid -> syncService.deleteIncome(uid, transaction.id) }
+                runCatching { syncService.deleteIncome(userId, transaction.id) }
             }
             TransactionType.EXPENSE -> {
-                val existing = expenseDao.getById(transaction.id) ?: error("Expense not found.")
+                val existing = expenseDao.getById(transaction.id, userId) ?: error("Expense not found.")
                 expenseDao.delete(existing)
-                firebaseAuth.currentUser?.uid?.let { uid -> syncService.deleteExpense(uid, transaction.id) }
+                runCatching { syncService.deleteExpense(userId, transaction.id) }
             }
             TransactionType.GOAL_TRANSFER -> error("Automatic goal reserve entries cannot be deleted here.")
+        }
+    }
+
+    private fun <T> scopedFinanceData(
+        block: suspend (List<IncomeEntity>, List<ExpenseEntity>, List<GoalEntity>, String, Map<String, Double>) -> T,
+    ): Flow<T> {
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                emptyFlow()
+            } else {
+                combine(
+                    incomeDao.observeAll(user.uid),
+                    expenseDao.observeAll(user.uid),
+                    goalDao.observeAllGoals(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                    block,
+                )
+            }
         }
     }
 

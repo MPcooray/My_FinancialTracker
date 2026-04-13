@@ -6,11 +6,13 @@ import com.example.my_financialtracker.data.local.dao.GoalDao
 import com.example.my_financialtracker.data.local.entity.GoalEntity
 import com.example.my_financialtracker.data.preferences.UserPreferencesRepository
 import com.example.my_financialtracker.data.remote.FirestoreSyncService
+import com.example.my_financialtracker.data.session.AuthSessionManager
 import com.example.my_financialtracker.model.GoalOverview
 import com.example.my_financialtracker.repository.GoalRepository
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import java.util.Calendar
 import java.util.UUID
 import kotlin.math.abs
@@ -20,27 +22,39 @@ class LocalGoalRepository(
     private val goalDao: GoalDao,
     private val userPreferencesRepository: UserPreferencesRepository,
     private val exchangeRateRepository: ExchangeRateRepository,
-    private val firebaseAuth: FirebaseAuth,
+    private val authSessionManager: AuthSessionManager,
     private val syncService: FirestoreSyncService,
 ) : GoalRepository {
 
     override fun observePrimaryGoal(): Flow<GoalOverview?> {
-        return combine(
-            goalDao.observePrimaryGoal(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { goal, preferredCurrency, rates ->
-            goal?.toOverview(preferredCurrency, rates)
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(null)
+            } else {
+                combine(
+                    goalDao.observePrimaryGoal(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { goal, preferredCurrency, rates ->
+                    goal?.toOverview(preferredCurrency, rates)
+                }
+            }
         }
     }
 
     override fun observeGoals(): Flow<List<GoalOverview>> {
-        return combine(
-            goalDao.observeAllGoals(),
-            userPreferencesRepository.preferredCurrency,
-            exchangeRateRepository.ratesToLkr,
-        ) { goals, preferredCurrency, rates ->
-            goals.map { it.toOverview(preferredCurrency, rates) }
+        return authSessionManager.currentUser.flatMapLatest { user ->
+            if (user == null) {
+                flowOf(emptyList())
+            } else {
+                combine(
+                    goalDao.observeAllGoals(user.uid),
+                    userPreferencesRepository.preferredCurrency,
+                    exchangeRateRepository.ratesToLkr,
+                ) { goals, preferredCurrency, rates ->
+                    goals.map { it.toOverview(preferredCurrency, rates) }
+                }
+            }
         }
     }
 
@@ -53,8 +67,10 @@ class LocalGoalRepository(
         contributionDayOfMonth: Int,
         allowEmergencyUse: Boolean,
     ): Result<Unit> = runCatching {
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
         val goal = GoalEntity(
             id = "goal_${UUID.randomUUID()}",
+            userId = userId,
             title = title.trim(),
             targetAmountLkr = targetAmount,
             currentSavedLkr = currentSaved,
@@ -68,11 +84,12 @@ class LocalGoalRepository(
             createdAt = System.currentTimeMillis(),
         )
         goalDao.upsert(goal)
-        firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushGoal(uid, goal) }
+        runCatching { syncService.pushGoal(userId, goal) }
     }
 
     override suspend fun applyEmergencyWithdrawal(goalId: String, amount: Double): Result<Unit> = runCatching {
-        val goal = goalDao.getGoalById(goalId) ?: error("Goal not found.")
+        val userId = authSessionManager.currentUserValue?.uid ?: error("No signed-in user.")
+        val goal = goalDao.getGoalById(goalId, userId) ?: error("Goal not found.")
         require(goal.allowEmergencyUse) { "Emergency use is disabled for this goal." }
         require(amount > 0.0) { "Enter a valid withdrawal amount." }
 
@@ -81,12 +98,13 @@ class LocalGoalRepository(
             emergencyUsedLkr = goal.emergencyUsedLkr + amount,
         )
         goalDao.upsert(updated)
-        firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushGoal(uid, updated) }
+        runCatching { syncService.pushGoal(userId, updated) }
     }
 
     override suspend fun refreshGoalContributionsIfNeeded() {
         val now = Calendar.getInstance()
-        val goals = goalDao.getAllGoals()
+        val userId = authSessionManager.currentUserValue?.uid ?: return
+        val goals = goalDao.getAllGoals(userId)
         goals.forEach { goal ->
             if (goal.monthlyContributionLkr <= 0.0) return@forEach
             val lastContributionMonth = goal.lastContributionAt.takeIf { it > 0L }?.let {
@@ -104,7 +122,7 @@ class LocalGoalRepository(
                     lastContributionAt = now.timeInMillis,
                 )
                 goalDao.upsert(updated)
-                firebaseAuth.currentUser?.uid?.let { uid -> syncService.pushGoal(uid, updated) }
+                runCatching { syncService.pushGoal(userId, updated) }
             }
         }
     }

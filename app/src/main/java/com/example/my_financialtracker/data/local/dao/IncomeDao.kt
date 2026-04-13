@@ -10,14 +10,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface IncomeDao {
-    @Query("SELECT * FROM income_entries ORDER BY receivedAt DESC")
-    fun observeAll(): Flow<List<IncomeEntity>>
+    @Query("SELECT * FROM income_entries WHERE userId = :userId ORDER BY receivedAt DESC")
+    fun observeAll(userId: String): Flow<List<IncomeEntity>>
 
-    @Query("SELECT * FROM income_entries ORDER BY receivedAt DESC")
-    suspend fun getAll(): List<IncomeEntity>
+    @Query("SELECT * FROM income_entries WHERE userId = :userId ORDER BY receivedAt DESC")
+    suspend fun getAll(userId: String): List<IncomeEntity>
 
-    @Query("SELECT * FROM income_entries WHERE id = :id LIMIT 1")
-    suspend fun getById(id: String): IncomeEntity?
+    @Query("SELECT * FROM income_entries WHERE id = :id AND userId = :userId LIMIT 1")
+    suspend fun getById(id: String, userId: String): IncomeEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<IncomeEntity>)

@@ -6,6 +6,7 @@ import com.example.my_financialtracker.data.local.FinanceDatabase
 import com.example.my_financialtracker.data.preferences.UserPreferencesRepository
 import com.example.my_financialtracker.data.currency.ExchangeRateRepository
 import com.example.my_financialtracker.data.remote.FirestoreSyncService
+import com.example.my_financialtracker.data.session.AuthSessionManager
 import com.example.my_financialtracker.data.storage.FileStorageManager
 import com.example.my_financialtracker.repository.AuthRepository
 import com.example.my_financialtracker.repository.FinanceRepository
@@ -19,24 +20,41 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import com.google.firebase.firestore.FirebaseFirestore
+import java.util.concurrent.atomic.AtomicBoolean
 
 object AppContainer {
     lateinit var appContext: Context
         private set
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val deferredStartupScheduled = AtomicBoolean(false)
 
     fun initialize(application: Application) {
         appContext = application.applicationContext
+    }
+
+    fun runDeferredStartupWork() {
+        if (!deferredStartupScheduled.compareAndSet(false, true)) return
+
         applicationScope.launch {
-            financeRepository.seedDemoDataIfNeeded()
-            financeRepository.refreshRecurringExpensesIfNeeded()
-            goalRepository.refreshGoalContributionsIfNeeded()
-            goalRepository.seedDemoGoalIfNeeded()
-            exchangeRateRepository.refreshRatesIfNeeded()
+            runCatching { financeRepository.seedDemoDataIfNeeded() }
+            runCatching { financeRepository.refreshRecurringExpensesIfNeeded() }
+            runCatching { goalRepository.refreshGoalContributionsIfNeeded() }
+            runCatching { goalRepository.seedDemoGoalIfNeeded() }
+            runCatching { exchangeRateRepository.refreshRatesIfNeeded() }
         }
     }
 
-    val authRepository: AuthRepository by lazy { FirebaseAuthRepository() }
+    val authSessionManager: AuthSessionManager by lazy {
+        AuthSessionManager()
+    }
+
+    val authRepository: AuthRepository by lazy {
+        FirebaseAuthRepository(
+            firebaseAuth = firebaseAuth,
+            authSessionManager = authSessionManager,
+            appContext = appContext,
+        )
+    }
 
     val firestore: FirebaseFirestore by lazy {
         FirebaseFirestore.getInstance()
@@ -58,7 +76,7 @@ object AppContainer {
             detectedTransactionDao = database.detectedTransactionDao(),
             userPreferencesRepository = userPreferencesRepository,
             exchangeRateRepository = exchangeRateRepository,
-            firebaseAuth = firebaseAuth,
+            authSessionManager = authSessionManager,
             syncService = firestoreSyncService,
         )
     }
@@ -68,7 +86,7 @@ object AppContainer {
             goalDao = database.goalDao(),
             userPreferencesRepository = userPreferencesRepository,
             exchangeRateRepository = exchangeRateRepository,
-            firebaseAuth = firebaseAuth,
+            authSessionManager = authSessionManager,
             syncService = firestoreSyncService,
         )
     }

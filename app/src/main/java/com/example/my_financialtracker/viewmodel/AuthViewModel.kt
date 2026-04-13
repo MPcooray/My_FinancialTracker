@@ -1,5 +1,6 @@
 package com.example.my_financialtracker.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.my_financialtracker.data.AppContainer
@@ -15,6 +16,10 @@ import kotlinx.coroutines.flow.update
 class AuthViewModel(
     private val repository: AuthRepository = AppContainer.authRepository,
 ) : ViewModel() {
+    private companion object {
+        const val TAG = "AuthViewModel"
+    }
+
     private val syncService = AppContainer.firestoreSyncService
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -37,7 +42,8 @@ class AuthViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             repository.login(state.email, state.password)
                 .onSuccess { user ->
-                    syncService.syncUserData(user.uid)
+                    runCatching { syncService.syncUserData(user.uid) }
+                        .onFailure { Log.w(TAG, "Initial sync after login failed", it) }
                     _uiState.update { current -> current.copy(isLoading = false) }
                     onSuccess()
                 }
@@ -58,7 +64,8 @@ class AuthViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             repository.register(state.name, state.email, state.password)
                 .onSuccess { user ->
-                    syncService.syncUserData(user.uid)
+                    runCatching { syncService.syncUserData(user.uid) }
+                        .onFailure { Log.w(TAG, "Initial sync after registration failed", it) }
                     _uiState.update { current -> current.copy(isLoading = false) }
                     onSuccess()
                 }

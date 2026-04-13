@@ -13,6 +13,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -85,12 +86,18 @@ fun RegisterScreen(
             Button(
                 onClick = onRegister,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isLoading,
             ) {
-                Text(stringResource(R.string.button_create_account))
+                if (uiState.isLoading) {
+                    CircularProgressIndicator()
+                } else {
+                    Text(stringResource(R.string.button_create_account))
+                }
             }
             OutlinedButton(
                 onClick = onBackToLogin,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !uiState.isLoading,
             ) {
                 Text(stringResource(R.string.button_back_to_sign_in))
             }

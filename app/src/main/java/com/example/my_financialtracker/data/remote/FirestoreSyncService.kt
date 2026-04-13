@@ -72,11 +72,11 @@ class FirestoreSyncService(
         }
 
         if (remote.isEmpty()) {
-            incomeDao.getAll().forEach { entity ->
+            incomeDao.getAll(userId).forEach { entity ->
                 collection.document(entity.id).set(entity.toFirestore()).await()
             }
         } else {
-            incomeDao.upsertAll(remote.map { it.toEntity() })
+            incomeDao.upsertAll(remote.map { it.toEntity(userId) })
         }
     }
 
@@ -87,11 +87,11 @@ class FirestoreSyncService(
         }
 
         if (remote.isEmpty()) {
-            expenseDao.getAll().forEach { entity ->
+            expenseDao.getAll(userId).forEach { entity ->
                 collection.document(entity.id).set(entity.toFirestore()).await()
             }
         } else {
-            expenseDao.upsertAll(remote.map { it.toEntity() })
+            expenseDao.upsertAll(remote.map { it.toEntity(userId) })
         }
     }
 
@@ -102,11 +102,11 @@ class FirestoreSyncService(
         }
 
         if (remote.isEmpty()) {
-            goalDao.getAllGoals().forEach { goal ->
+            goalDao.getAllGoals(userId).forEach { goal ->
                 collection.document(goal.id).set(goal.toFirestore()).await()
             }
         } else {
-            goalDao.upsertAll(remote.map { it.toEntity() })
+            goalDao.upsertAll(remote.map { it.toEntity(userId) })
         }
     }
 
@@ -132,8 +132,9 @@ private fun IncomeEntity.toFirestore() = FirestoreIncome(
     createdAt = createdAt,
 )
 
-private fun FirestoreIncome.toEntity() = IncomeEntity(
+private fun FirestoreIncome.toEntity(userId: String) = IncomeEntity(
     id = id,
+    userId = userId,
     sourceType = sourceType,
     amountOriginal = amountOriginal,
     currency = currency,
@@ -161,8 +162,9 @@ private fun ExpenseEntity.toFirestore() = FirestoreExpense(
     createdAt = createdAt,
 )
 
-private fun FirestoreExpense.toEntity() = ExpenseEntity(
+private fun FirestoreExpense.toEntity(userId: String) = ExpenseEntity(
     id = id,
+    userId = userId,
     category = category,
     spendingType = spendingType,
     recurrenceType = recurrenceType,
@@ -193,8 +195,9 @@ private fun GoalEntity.toFirestore() = FirestoreGoal(
     createdAt = createdAt,
 )
 
-private fun FirestoreGoal.toEntity() = GoalEntity(
+private fun FirestoreGoal.toEntity(userId: String) = GoalEntity(
     id = id,
+    userId = userId,
     title = title,
     targetAmountLkr = targetAmountLkr,
     currentSavedLkr = currentSavedLkr,
